@@ -1,0 +1,356 @@
+# pip install yfinance matplotlib pillow
+
+# Execute com:
+# python bazin.py
+
+import tkinter as tk
+from tkinter import messagebox
+import yfinance as yf
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+
+def analisar_acao():
+
+    ticker = entrada_ticker.get().upper()
+
+    if ticker == "":
+        messagebox.showwarning("Aviso", "Digite uma ação.")
+        return
+
+    ticker_formatado = ticker + ".SA"
+
+    try:
+
+        acao = yf.Ticker(ticker_formatado)
+
+        info = acao.info
+
+        preco = info.get("currentPrice")
+        dividend_yield = info.get("dividendYield")
+        lucro = info.get("netIncomeToCommon")
+        divida_patrimonio = info.get("debtToEquity")
+        roe = info.get("returnOnEquity")
+        payout = info.get("payoutRatio")
+
+        dividendos = acao.dividends
+        anos_pagando = len(set(dividendos.index.year))
+
+        score = 0
+
+        resultado = ""
+        resultado += "━━━━━━━━━━━━━━━━━━━━━━\n"
+        resultado += "   ANÁLISE BAZIN\n"
+        resultado += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        resultado += f"📌 Ação: {ticker}\n"
+        resultado += f"💰 Preço atual: R$ {preco}\n\n"
+
+        # ===== DIVIDEND YIELD =====
+
+        if dividend_yield is not None:
+
+            dividend_yield *= 100
+
+            resultado += f"📈 Dividend Yield: {dividend_yield:.2f}%\n"
+
+            if dividend_yield >= 10:
+                score += 2
+                resultado += "✅ DY excelente (+2)\n"
+
+            elif dividend_yield >= 6:
+                score += 1
+                resultado += "✅ DY bom (+1)\n"
+
+            else:
+                resultado += "❌ DY baixo\n"
+
+        else:
+            resultado += "❌ Dividend Yield indisponível\n"
+
+        # ===== LUCRO =====
+
+        if lucro is not None and lucro > 0:
+            score += 1
+            resultado += "✅ Empresa lucrativa (+1)\n"
+
+        else:
+            resultado += "❌ Empresa com prejuízo\n"
+
+        # ===== DÍVIDA =====
+
+        if divida_patrimonio is not None:
+
+            resultado += f"🏦 Dívida/Patrimônio: {divida_patrimonio}\n"
+
+            if divida_patrimonio <= 50:
+                score += 2
+                resultado += "✅ Dívida muito baixa (+2)\n"
+
+            elif divida_patrimonio <= 100:
+                score += 1
+                resultado += "✅ Dívida controlada (+1)\n"
+
+            else:
+                resultado += "❌ Dívida alta\n"
+
+        else:
+            resultado += "❌ Dívida indisponível\n"
+
+        # ===== ROE =====
+
+        if roe is not None:
+
+            roe *= 100
+
+            resultado += f"📊 ROE: {roe:.2f}%\n"
+
+            if roe >= 20:
+                score += 2
+                resultado += "✅ ROE excelente (+2)\n"
+
+            elif roe >= 15:
+                score += 1
+                resultado += "✅ ROE bom (+1)\n"
+
+            else:
+                resultado += "❌ ROE baixo\n"
+
+        else:
+            resultado += "❌ ROE indisponível\n"
+
+        # ===== PAYOUT =====
+
+        if payout is not None:
+
+            payout *= 100
+
+            resultado += f"💵 Payout: {payout:.2f}%\n"
+
+            if 30 <= payout <= 80:
+                score += 1
+                resultado += "✅ Payout saudável (+1)\n"
+
+            else:
+                resultado += "❌ Payout ruim\n"
+
+        else:
+            resultado += "❌ Payout indisponível\n"
+
+        # ===== HISTÓRICO =====
+
+        resultado += f"🕒 Anos pagando dividendos: {anos_pagando}\n"
+
+        if anos_pagando >= 10:
+            score += 2
+            resultado += "✅ Histórico excelente (+2)\n"
+
+        elif anos_pagando >= 5:
+            score += 1
+            resultado += "✅ Histórico bom (+1)\n"
+
+        else:
+            resultado += "❌ Pouco histórico\n"
+
+        # ===== RESULTADO FINAL =====
+
+        resultado += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        resultado += f"⭐ SCORE FINAL: {score}\n"
+        resultado += "━━━━━━━━━━━━━━━━━━━━━━\n"
+
+        if score >= 8:
+            resultado += "🔥 Excelente ação para Bazin"
+
+        elif score >= 6:
+            resultado += "✅ Boa candidata"
+
+        elif score >= 4:
+            resultado += "⚠️ Empresa razoável"
+
+        else:
+            resultado += "❌ Fora dos critérios Bazin"
+
+        caixa_resultado.config(state="normal")
+        caixa_resultado.delete("1.0", tk.END)
+        caixa_resultado.insert(tk.END, resultado)
+        caixa_resultado.config(state="disabled")
+
+        # ===== GRÁFICO =====
+
+        historico = acao.history(period="6mo")
+
+        ax.clear()
+
+        linha, = ax.plot(
+            historico.index,
+            historico["Close"],
+            linewidth=2
+        )
+
+        ax.set_title(
+            f"{ticker} - Últimos 6 meses",
+            fontsize=14
+        )
+
+        ax.set_xlabel("Data")
+        ax.set_ylabel("Preço")
+
+        ax.grid(True)
+
+        # ===== TOOLTIP =====
+
+        annot = ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(20, 20),
+            textcoords="offset points",
+            bbox=dict(
+                boxstyle="round",
+                fc="black",
+                alpha=0.8
+            ),
+            color="white"
+        )
+
+        annot.set_visible(False)
+
+        def hover(event):
+
+            visivel = annot.get_visible()
+
+            if event.inaxes == ax:
+
+                cont, ind = linha.contains(event)
+
+                if cont:
+
+                    indice = ind["ind"][0]
+
+                    x = historico.index[indice]
+                    y = historico["Close"].iloc[indice]
+
+                    annot.xy = (x, y)
+
+                    texto = (
+                        f"Data: {x.strftime('%d/%m/%Y')}\n"
+                        f"Preço: R$ {y:.2f}"
+                    )
+
+                    annot.set_text(texto)
+
+                    annot.set_visible(True)
+
+                    grafico.draw_idle()
+
+                else:
+
+                    if visivel:
+
+                        annot.set_visible(False)
+
+                        grafico.draw_idle()
+
+        fig.canvas.mpl_connect(
+            "motion_notify_event",
+            hover
+        )
+
+        grafico.draw()
+
+    except Exception as erro:
+        messagebox.showerror("Erro", erro)
+
+
+# ===== JANELA =====
+
+janela = tk.Tk()
+
+janela.title("Analisador Bazin")
+janela.geometry("1100x750")
+janela.configure(bg="#121212")
+
+# ===== TÍTULO =====
+
+titulo = tk.Label(
+    janela,
+    text="📈 Analisador de Ações - Método Bazin",
+    font=("Segoe UI", 24, "bold"),
+    bg="#121212",
+    fg="white"
+)
+
+titulo.pack(pady=20)
+
+# ===== FRAME SUPERIOR =====
+
+frame_topo = tk.Frame(janela, bg="#121212")
+frame_topo.pack()
+
+# ===== ENTRADA =====
+
+entrada_ticker = tk.Entry(
+    frame_topo,
+    font=("Segoe UI", 16),
+    justify="center",
+    width=20,
+    bg="#1e1e1e",
+    fg="white",
+    insertbackground="white",
+    relief="flat"
+)
+
+entrada_ticker.grid(row=0, column=0, padx=10)
+
+# ===== BOTÃO =====
+
+botao = tk.Button(
+    frame_topo,
+    text="Analisar",
+    font=("Segoe UI", 14, "bold"),
+    bg="#00b894",
+    fg="white",
+    padx=20,
+    pady=8,
+    relief="flat",
+    command=analisar_acao
+)
+
+botao.grid(row=0, column=1)
+
+# ===== FRAME PRINCIPAL =====
+
+frame_principal = tk.Frame(janela, bg="#121212")
+frame_principal.pack(pady=20)
+
+# ===== RESULTADO =====
+
+caixa_resultado = tk.Text(
+    frame_principal,
+    font=("Cascadia Code", 11),
+    width=50,
+    height=30,
+    bg="#1e1e1e",
+    fg="white",
+    relief="flat",
+    padx=15,
+    pady=15
+)
+
+caixa_resultado.grid(row=0, column=0, padx=20)
+
+caixa_resultado.config(state="disabled")
+
+# ===== GRÁFICO =====
+
+fig, ax = plt.subplots(figsize=(6, 5))
+
+grafico = FigureCanvasTkAgg(
+    fig,
+    master=frame_principal
+)
+
+grafico.get_tk_widget().grid(row=0, column=1)
+
+# ===== LOOP =====
+
+janela.mainloop()
